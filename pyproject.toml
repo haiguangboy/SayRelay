@@ -1,0 +1,28 @@
+[project]
+name = "local-voice-input"
+version = "0.1.0"
+description = "Offline microphone dictation for Ubuntu and focused desktop apps"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [{name = "Local Voice Input contributors"}]
+requires-python = ">=3.12"
+dependencies = [
+  "faster-whisper==1.2.1",
+  "ctranslate2==4.8.5",
+  "av==16.1.0",
+  "numpy==2.5.4",
+  "onnxruntime==1.31.1",
+  "opencc-python-reimplemented==0.1.7",
+  "sherpa-onnx==2.0.1",
+]
+
+[project.scripts]
+voice-input = "voice_input.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["voice_input*"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
