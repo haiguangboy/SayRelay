@@ -1,4 +1,4 @@
-include install.py CHANGELOG.md CONTRIBUTING.md SECURITY.md VALIDATION.md
+include install.py README.zh-CN.md CHANGELOG.md CONTRIBUTING.md SECURITY.md VALIDATION.md
 recursive-include docs *.md
 include models/README.md models/SHA256SUMS.*
 recursive-include models source.json UPSTREAM_README.md
