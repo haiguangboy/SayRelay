@@ -38,7 +38,7 @@ git push -u origin main
 4. 检查许可证和第三方通知；二进制包还需收集实际分发的依赖与模型许可证。
 5. 更新版本、CHANGELOG 和验证范围，再创建版本标签及 GitHub Release。
 
-GitHub Actions 配置只运行不依赖本机模型的测试，5 项真实模型测试会跳过。桌面授权、焦点、麦克风和休眠唤醒需要实机验证；远程 CI 尚未运行。
+GitHub Actions 配置只运行不依赖本机模型的测试，5 项真实模型测试会跳过。2026 年 11 月 9 日首次远程 CI 已通过，见 [运行记录](https://github.com/haiguangboy/SayRelay/actions/runs/42557243752)。桌面授权、焦点、麦克风和休眠唤醒需要实机验证。
 
 ## 分发路线
 

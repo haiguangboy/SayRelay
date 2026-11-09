@@ -86,3 +86,9 @@ Ubuntu 24.04 / GNOME 46 / Wayland，Core Ultra 7 255H，平衡模式。默认 sm
 本机含模型环境 30 项测试全部通过。从 Git 暂存树导出独立临时目录，不携带模型，25 项测试通过、5 项真实模型测试跳过。混合词汇的真实标点测试现明确依赖模型文件，避免干净仓库中的测试因缺失权重失败；测试中的示例路径改用 `/home/demo`。GitHub Actions 配置按 Ubuntu 24.04 系统 Python 与 PyGObject 设置，远程工作流尚未运行。
 
 在干净导出目录中使用 `uv build` 构建 sdist 和 wheel 均成功。检查 sdist 包含安装器、文档、模型来源 / 校验清单和桌面测试；wheel 包含 MIT 许可和第三方说明。两者均不包含模型权重或录音。wheel 仅是 Python 包构建验证，尚非完整桌面安装包；对外源码分发优先使用包含整个仓库的源码归档。
+
+**11 月 9 日，公开仓库上传与远程 CI。**
+
+用户创建 [haiguangboy/SayRelay](https://github.com/haiguangboy/SayRelay) 后，经已授权的 SSH 密钥推送 `main`。首次推送前再次运行本机 30 项测试，全部通过；核对 Git 跟踪内容不含模型权重、录音或本机键盘恢复令牌。英文和中文 README 已补上真实仓库克隆地址，包元数据也指向同一仓库。
+
+GitHub Actions 首次运行 [42557243752](https://github.com/haiguangboy/SayRelay/actions/runs/42557243752) 的 Ubuntu 24.04 作业通过，包括系统依赖安装、虚拟环境创建、Python 包安装和单元测试。此环境未下载模型，25 项测试运行、5 项模型测试跳过。这个结果验证远程环境可以安装依赖并执行基础测试，尚不构成新机桌面录音、授权、粘贴或识别准确率验收。

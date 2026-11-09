@@ -2,6 +2,8 @@
 
 **Offline dictation for Ubuntu. Speak, transcribe, paste.**
 
+[![Tests](https://github.com/haiguangboy/SayRelay/actions/workflows/tests.yml/badge.svg)](https://github.com/haiguangboy/SayRelay/actions/workflows/tests.yml)
+
 [简体中文](README.zh-CN.md) · [Model setup](docs/MODELS.md) · [Changelog](CHANGELOG.md) · [Roadmap](docs/PRODUCT_PLAN.md)
 
 SayRelay turns microphone audio into text and pastes it into the focused input field. Use it with Codex, editors, browsers, and terminal applications that accept clipboard paste.
@@ -137,7 +139,7 @@ GDK_BACKEND=x11 .venv/bin/python tests/desktop_smoke.py
 
 Keep the test window focused. These tests paste into that window without pressing Enter.
 
-Further documentation is currently in Chinese: [architecture](docs/ARCHITECTURE.md), [validation record](VALIDATION.md), [contributing](CONTRIBUTING.md), and [release process](docs/RELEASE.md). GitHub Actions is configured; remote execution has not yet been verified.
+Further documentation is currently in Chinese: [architecture](docs/ARCHITECTURE.md), [validation record](VALIDATION.md), [contributing](CONTRIBUTING.md), and [release process](docs/RELEASE.md). The first GitHub Actions run passed on Ubuntu 24.04; it runs the 25 tests that do not require local model weights and skips the 5 model-dependent tests. Desktop integration still requires a real graphical session.
 
 ## Uninstall
 

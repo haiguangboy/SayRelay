@@ -8,6 +8,8 @@ Ubuntu 本机麦克风 → 本地 Whisper → 简体中文与标点 → 当前�
 
 项目文档：[架构与模块](docs/ARCHITECTURE.md) · [产品路线](docs/PRODUCT_PLAN.md) · [版本记录](CHANGELOG.md) · [开发协作](CONTRIBUTING.md) · [发布流程](docs/RELEASE.md) · [第三方组件](THIRD_PARTY_NOTICES.md)。
 
+[GitHub Actions](https://github.com/haiguangboy/SayRelay/actions/workflows/tests.yml) 首次远程运行已通过：Ubuntu 24.04 上的 25 项无模型测试通过，5 项依赖本地模型的测试跳过。含模型的本机环境共 30 项通过；远程测试不验证麦克风、桌面授权或实际输入框粘贴。
+
 本机录音、转写、取消，以及原生 Wayland / XWayland 输入框粘贴验证已通过，详见 [验证记录](VALIDATION.md)。Codex 和其他实际应用的日常体验仍需要用户试用。
 
 首版面向 Ubuntu 24.04 / GNOME Wayland。按 `Ctrl+Alt+空格` 开始录音，再按一次结束、转写并粘贴；`Ctrl+Alt+Shift+空格` 取消。先点选 Codex 或其他应用的输入框，转写期间保持焦点。只粘贴，不按回车发送。
