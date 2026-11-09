@@ -52,6 +52,9 @@ class Window(Gtk.Window):
         self.model.append("small", "small · 标准档")
         self.model.append("base", "base · 快速档")
         self.source = Gtk.ComboBoxText()
+        self.input_mode = Gtk.ComboBoxText()
+        self.input_mode.append("local", "本机麦克风")
+        self.input_mode.append("remote", "小米遥控器麦克风")
         self.source.append("", "跟随系统默认麦克风")
         try:
             for name, description in sources():
@@ -64,13 +67,22 @@ class Window(Gtk.Window):
             self.output.append(key, label)
         self.punctuation = Gtk.CheckButton(label="自动添加中文标点")
         self.punctuation.connect("toggled", self._punctuation_changed)
-        for row, (label, widget) in enumerate([("模型", self.model), ("麦克风", self.source), ("输出", self.output)]):
+        for row, (label, widget) in enumerate([("输入来源", self.input_mode), ("模型", self.model),
+                                             ("本机设备", self.source), ("输出", self.output)]):
             grid.attach(Gtk.Label(label=label, xalign=0), 0, row, 1, 1)
             widget.set_hexpand(True)
             grid.attach(widget, 1, row, 1, 1)
         content.pack_start(grid, False, False, 0)
+        self.remote_label = Gtk.Label(xalign=0)
+        self.remote_label.set_line_wrap(True)
+        content.pack_start(self.remote_label, False, False, 0)
+        self.remote_enable_button = Gtk.Button(label="启用遥控器按键（首次需要系统授权）")
+        self.remote_enable_button.set_no_show_all(True)
+        self.remote_enable_button.connect("clicked", lambda *_: self._action("enable-remote-buttons"))
+        content.pack_start(self.remote_enable_button, False, False, 0)
         content.pack_start(self.punctuation, False, False, 0)
-        for widget, key in [(self.model, "model"), (self.source, "source"), (self.output, "output")]:
+        for widget, key in [(self.input_mode, "input_mode"), (self.model, "model"),
+                            (self.source, "source"), (self.output, "output")]:
             widget.connect("changed", self._configure, key)
 
         advanced = Gtk.Expander(label="识别方式与常用词")
@@ -181,19 +193,37 @@ class Window(Gtk.Window):
     def refresh(self):
         status = self.controller.status()
         recording = status["state"] == "recording"
+        remote = status["config"]["input_mode"] == "remote"
+        remote_status = status["remote"]
+        battery = remote_status.get("battery")
+        voice_message = ("遥控器语音通道已连接" if remote_status["state"] == "ready" and
+                         not remote_status["buttons"]["ready"] else remote_status["message"])
+        self.remote_label.set_text((voice_message +
+                                    (f" · 电量 {battery}%" if battery is not None else "") + "\n" +
+                                    (remote_status["setup_message"] if remote_status["setup_running"] else
+                                     remote_status["buttons"]["message"])) if remote else "")
+        self.remote_enable_button.set_visible(remote)
+        self.remote_enable_button.set_sensitive(remote and not remote_status["buttons"]["ready"] and
+                                                not remote_status["setup_running"])
+        self.remote_enable_button.set_label("等待系统设备授权…" if remote_status["setup_running"] else
+                                            "遥控器按键已启用" if remote_status["buttons"]["ready"] else
+                                            "启用遥控器按键（首次需要系统授权）")
         self.status_label.set_text((f"● 录音中  {status['recording_seconds']:.0f} 秒\n" if recording else "") + status["message"])
         style = self.status_label.get_style_context()
         (style.add_class if recording else style.remove_class)("recording")
-        self.record_button.set_label("停止并转写" if recording else "重试加载模型" if status["state"] == "error" else "开始录音")
-        self.record_button.set_sensitive(status["state"] in {"idle", "recording", "error"})
+        self.record_button.set_label("停止并转写" if recording else "重试加载模型" if status["state"] == "error"
+                                     else "请收起窗口，在目标输入框按住遥控器语音键" if remote else "开始录音")
+        self.record_button.set_sensitive(status["state"] in {"recording", "error"} or
+                                         (status["state"] == "idle" and not remote))
         self.permission_label.set_text(status["keyboard_message"])
         self.enable_button.set_label("恢复自动粘贴" if status.get("keyboard_remembered") else "启用自动粘贴")
         self.enable_button.set_sensitive(not status["keyboard_ready"] and not status["keyboard_connecting"])
         self.changing = True
-        for widget, key in [(self.model, "model"), (self.source, "source"), (self.output, "output"),
+        for widget, key in [(self.input_mode, "input_mode"), (self.model, "model"), (self.source, "source"), (self.output, "output"),
                             (self.decoding, "decoding")]:
             widget.set_active_id(status["config"][key])
             widget.set_sensitive(status["state"] == "idle")
+        self.source.set_sensitive(status["state"] == "idle" and not remote)
         self.punctuation.set_active(status["config"]["punctuation"])
         self.punctuation.set_sensitive(status["state"] == "idle")
         if status["config"]["vocabulary"] != self.last_vocabulary:

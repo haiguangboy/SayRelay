@@ -15,6 +15,7 @@ class Config:
     model: str = "small"
     threads: int = 4
     source: str = ""
+    input_mode: str = "local"
     output: str = "paste"
     language: str = "zh"
     punctuation: bool = True
@@ -23,6 +24,8 @@ class Config:
     max_record_seconds: int = 120
 
     def validate(self):
+        if self.input_mode not in {"local", "remote"}:
+            raise ValueError("输入来源应为 local 或 remote")
         if self.model not in {"base", "small"}:
             raise ValueError("模型应为 base 或 small")
         if not isinstance(self.threads, int) or not 1 <= self.threads <= 16:

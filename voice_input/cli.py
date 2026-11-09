@@ -70,7 +70,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     daemon = commands.add_parser("serve", help="运行后台服务")
     daemon.add_argument("--background", action="store_true")
-    for command in ["toggle", "start", "stop", "cancel", "status", "show", "enable-paste", "copy", "quit"]:
+    for command in ["toggle", "start", "stop", "cancel", "status", "show", "enable-paste",
+                    "enable-remote-buttons", "copy", "quit"]:
         commands.add_parser(command)
     transcribe = commands.add_parser("transcribe", help="转写 16 kHz 单声道 PCM WAV")
     transcribe.add_argument("path", type=Path)
@@ -82,6 +83,7 @@ def main():
     config.add_argument("--model", choices=["small", "base"])
     config.add_argument("--output", choices=["paste", "terminal", "clipboard"])
     config.add_argument("--source")
+    config.add_argument("--input-mode", choices=["local", "remote"], help="本机麦克风或小米遥控器")
     config.add_argument("--threads", type=int)
     config.add_argument("--language", choices=["zh", "en", "auto"], help="主要语言")
     config.add_argument("--decoding", choices=["fast", "careful"], help="快速或精细识别")

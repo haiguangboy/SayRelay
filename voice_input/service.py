@@ -3,6 +3,7 @@ import os
 import socket
 import socketserver
 import struct
+import subprocess
 import threading
 import time
 import uuid
@@ -14,10 +15,12 @@ from pathlib import Path
 from gi.repository import GLib
 
 from .audio import Microphone, read_pcm
-from .config import Config, RUNTIME_DIR, SOCKET_PATH
+from .config import Config, ROOT, RUNTIME_DIR, SOCKET_PATH
 from .delivery import copy_text, notify
 from .keyboard import PortalKeyboard
 from .recognizer import Recognizer
+from .remote import RemoteMicrophone
+from .remote_buttons import RemoteButtons
 
 
 class Controller:
@@ -29,6 +32,12 @@ class Controller:
         self.last_result = None
         self.recognizer = None
         self.microphone = Microphone()
+        self.capture = None
+        self.remote = RemoteMicrophone(self._remote_requested, self._remote_ended, self._remote_failed)
+        self.remote_buttons = RemoteButtons(self._remote_requested, self._remote_ended, self._remote_failed)
+        self.remote.button_control = True
+        self.remote_setup_process = None
+        self.remote_setup_message = ""
         self.jobs = OrderedDict()
         self.job = None
         self.cancelled = set()
@@ -37,6 +46,9 @@ class Controller:
         self.keyboard = PortalKeyboard(self._keyboard_changed)
         self.window = None
         self.quitting = False
+        if self.config.input_mode == "remote":
+            self.remote.enable()
+            self.remote_buttons.enable()
         self._load()
         if self.config.output != "clipboard" and self.keyboard.restore_token:
             GLib.idle_add(self._restore_keyboard)
@@ -75,18 +87,81 @@ class Controller:
         def completed(recognizer, error):
             self.recognizer = recognizer
             self.state = "error" if error else "idle"
-            self.message = f"模型加载失败：{error}" if error else "就绪，按 Ctrl+Alt+空格开始录音"
+            self.message = (f"模型加载失败：{error}" if error else
+                            "就绪，等待遥控器连接后按住语音键说话" if self.config.input_mode == "remote" else
+                            "就绪，按 Ctrl+Alt+空格开始录音")
 
         self._run(lambda: Recognizer(config), completed)
 
     def status(self):
-        elapsed = time.monotonic() - self.microphone.started if self.state == "recording" else 0
+        elapsed = time.monotonic() - self.capture.started if self.state == "recording" else 0
+        remote = self.remote.status()
+        remote["buttons"] = self.remote_buttons.status()
+        remote["ready"] = remote["ready"] and self.remote_buttons.ready
+        remote["setup_running"] = self.remote_setup_process is not None
+        remote["setup_message"] = self.remote_setup_message
         return {"ok": True, "state": self.state, "message": self.message,
                 "config": asdict(self.config), "keyboard_ready": bool(self.keyboard.session),
                 "keyboard_connecting": self.keyboard.connecting,
                 "keyboard_remembered": bool(self.keyboard.restore_token),
                 "keyboard_message": self.keyboard_message, "recording_seconds": elapsed,
+                "remote": remote,
                 "job": self.job, "last_text": self.last_text, "last_result": self.last_result}
+
+    def _remote_requested(self):
+        if self.config.input_mode != "remote" or self.quitting:
+            return
+        if self.state == "recording" and self.capture is self.remote:
+            return
+        if self.state != "idle":
+            notify("尚未开始遥控器录音", "请等当前转写完成，再按住语音键")
+            return
+        try:
+            self.start()
+        except Exception as error:
+            self.message = str(error)
+            notify("遥控器未开始录音", self.message)
+
+    def _remote_ended(self):
+        if self.state == "recording" and self.capture is self.remote:
+            try:
+                self.stop()
+            except Exception as error:
+                self._remote_failed(str(error))
+
+    def _remote_failed(self, message):
+        if self.state == "recording" and self.capture is self.remote:
+            self.remote.discard()
+            self._finish(self.job, "error", message)
+            notify("遥控器录音未完成", message, persistent=True)
+
+    def _enable_remote_buttons(self):
+        if self.remote_setup_process is not None:
+            return {"ok": True, "pending": True}
+        script = ROOT / "tools/remote_input_access.py"
+        if not script.is_file():
+            raise RuntimeError("设备授权脚本缺失，请使用完整源码安装 SayRelay")
+        self.remote_setup_process = subprocess.Popen(
+            ["pkexec", "/usr/bin/python3", str(script)], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.remote_setup_message = "请在 Ubuntu 系统授权窗口输入密码，启用小米遥控器按键"
+
+        def completed():
+            process = self.remote_setup_process
+            if process is None:
+                return GLib.SOURCE_REMOVE
+            if process.poll() is None:
+                return GLib.SOURCE_CONTINUE
+            stdout, stderr = process.communicate()
+            self.remote_setup_process = None
+            self.remote_setup_message = ("遥控器设备授权已完成，正在接通按键" if process.returncode == 0 else
+                                         "设备授权未完成，可重试；也可查看文档中的 sudo 安装方式")
+            if process.returncode != 0:
+                notify("遥控器按键尚未启用", self.remote_setup_message, persistent=True)
+            return GLib.SOURCE_REMOVE
+
+        GLib.timeout_add(250, completed)
+        return {"ok": True, "pending": True}
 
     def _available(self):
         if self.state != "idle":
@@ -103,23 +178,41 @@ class Controller:
 
     def start(self):
         self._available()
+        capture = self.remote if self.config.input_mode == "remote" else self.microphone
+        if capture is self.remote and self.remote.state != "ready":
+            raise RuntimeError(self.remote.message)
         if self.config.output != "clipboard" and not self.keyboard.session:
             self.keyboard.connect()
-            self.message = "自动粘贴尚未就绪，本次未开始录音；完成系统授权后请再次按 Ctrl+Alt+空格"
+            retry = "按住遥控器语音键" if capture is self.remote else "按 Ctrl+Alt+空格"
+            self.message = f"自动粘贴尚未就绪，本次未开始录音；完成系统授权后请再次{retry}"
             notify("尚未开始录音：请先启用自动粘贴", self.message, persistent=True)
             return {"ok": True, "state": self.state, "recording_started": False,
                     "reason": "keyboard_authorization"}
-        self.microphone.start(self.config.source)
+        capture.start(self.config.source)
+        self.capture = capture
         job = self._new_job(True)
+        job["input_mode"] = self.config.input_mode
         self.state = "recording"
-        self.message = "正在录音，再按 Ctrl+Alt+空格结束；Ctrl+Alt+Shift+空格取消"
-        notify("开始录音", "再按 Ctrl+Alt+空格结束并转写")
+        self.message = ("正在使用遥控器录音，松开语音键结束；Ctrl+Alt+Shift+空格取消"
+                        if capture is self.remote else
+                        "正在录音，再按 Ctrl+Alt+空格结束；Ctrl+Alt+Shift+空格取消")
+        notify("开始录音", "松开遥控器语音键结束并转写" if capture is self.remote else
+               "再按 Ctrl+Alt+空格结束并转写")
         return {"ok": True, "job_id": job["id"], "state": self.state}
 
     def stop(self):
         if self.state != "recording":
             raise RuntimeError("当前没有录音")
-        self._recognize(self.microphone.stop)
+        if self.capture is self.remote:
+            # Freeze the PCM on the GLib thread, before any later BLE packets.
+            try:
+                pcm = self.remote.stop()
+            except Exception as error:
+                self._remote_failed(str(error))
+                raise
+            self._recognize(lambda: pcm)
+        else:
+            self._recognize(self.microphone.stop)
         notify("正在转写", "请保持目标输入框的焦点")
         return {"ok": True, "job_id": self.job["id"], "state": self.state}
 
@@ -203,11 +296,12 @@ class Controller:
         job["state"] = state
         job["message"] = message
         self.state = "idle"
+        self.capture = None
         self.message = message
 
     def cancel(self):
         if self.state == "recording":
-            self.microphone.discard()
+            self.capture.discard()
             self._finish(self.job, "cancelled", "已取消录音")
         elif self.state in {"transcribing", "delivering"}:
             self.cancelled.add(self.job["id"])
@@ -221,14 +315,16 @@ class Controller:
         if self.quitting:
             return GLib.SOURCE_REMOVE
         if self.state == "recording":
+            capture = self.capture
             try:
-                self.microphone.check()
-                if time.monotonic() - self.microphone.started >= self.config.max_record_seconds:
+                capture.check()
+                if time.monotonic() - capture.started >= self.config.max_record_seconds:
                     self.stop()
             except Exception as error:
-                self.microphone.discard()
-                self._finish(self.job, "error", str(error))
-                notify("录音失败", str(error))
+                capture.discard()
+                if self.state == "recording":
+                    self._finish(self.job, "error", str(error))
+                    notify("录音失败", str(error))
         return GLib.SOURCE_CONTINUE
 
     def dispatch(self, request):
@@ -253,15 +349,27 @@ class Controller:
         if action == "enable-paste":
             self.keyboard.connect()
             return {"ok": True, "ready": bool(self.keyboard.session)}
+        if action == "enable-remote-buttons":
+            return self._enable_remote_buttons()
         if action == "configure":
             self._available()
             data = {**asdict(self.config), **request.get("values", {})}
             config = Config(**data).validate()
             reload_model = (config.model, config.threads) != (self.config.model, self.config.threads)
+            switch_input = config.input_mode != self.config.input_mode
             if not config.model_path.joinpath("model.bin").is_file():
                 raise ValueError("本地模型尚未安装")
             config.save()
             self.config = config
+            if switch_input:
+                if config.input_mode == "remote":
+                    self.remote.enable()
+                    self.remote_buttons.enable()
+                else:
+                    self.remote_buttons.close()
+                    self.remote.close()
+                self.message = ("已切换到遥控器麦克风" if config.input_mode == "remote" else
+                                "已切换到本机麦克风，按 Ctrl+Alt+空格开始录音")
             if reload_model:
                 self.recognizer = None
                 self._load()
@@ -307,6 +415,14 @@ class Controller:
     def close(self):
         self.quitting = True
         self.microphone.discard()
+        self.remote_buttons.close()
+        self.remote.close()
+        if self.remote_setup_process and self.remote_setup_process.poll() is None:
+            try:
+                self.remote_setup_process.terminate()
+            except (PermissionError, ProcessLookupError):
+                # An already authenticated, bounded system setup may finish.
+                pass
         self.keyboard.close()
         self.worker.shutdown(wait=False, cancel_futures=True)
 

@@ -10,7 +10,7 @@ SayRelay turns microphone audio into text and pastes it into the focused input f
 
 Speech recognition runs locally. Chinese output is converted to Simplified Chinese and receives punctuation from a local model. No cloud transcription account or API key is required.
 
-**Status: 0.1.0 prototype.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. The current input source is the computer's microphone. Xiaomi Bluetooth remote support is planned. The settings window currently uses Chinese labels.
+**Status: 0.1.0 prototype, with experimental remote input.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. Choose the computer's microphone or Xiaomi Bluetooth Remote 2 Pro in settings. The remote's real GATT handshake is verified; speech capture and desktop delivery still require the manual remote test described below. The settings window currently uses Chinese labels.
 
 ## What works today
 
@@ -21,6 +21,7 @@ Speech recognition runs locally. Chinese output is converted to Simplified Chine
 - Remembered desktop keyboard permission and restoration after a service restart.
 - Visible warnings and preserved text when automatic paste fails.
 - A GTK settings window, CLI, and local Unix socket for integrations.
+- A saved input-source switch, BlueZ remote discovery, battery status, and ATVV audio decoding.
 
 SayRelay pastes text without pressing Enter. Choose the input field before recording and keep it focused until delivery completes.
 
@@ -87,6 +88,10 @@ voice-input status
 voice-input toggle
 voice-input cancel
 
+# Select the computer microphone or the paired Xiaomi remote
+voice-input configure --input-mode local
+voice-input configure --input-mode remote
+
 # Applications, terminals, or clipboard only
 voice-input configure --output paste
 voice-input configure --output terminal
@@ -102,6 +107,24 @@ voice-input insert 'Text from another program'
 The public name is SayRelay; the current command, service, Python package, and configuration paths retain the `voice-input` / `voice_input` names.
 
 The [Chinese guide](README.zh-CN.md) includes model options, vocabulary hints, and the JSON socket interface. The socket is restricted to the same user and does not expose an HTTP service.
+
+## Xiaomi remote input (experimental)
+
+Pair **Xiaomi Bluetooth Remote 2 Pro** in Ubuntu's Bluetooth settings, then select **输入来源 → 小米遥控器麦克风** in SayRelay. On first use, click **启用遥控器按键** and authenticate in Ubuntu's system dialog. Wait until the voice channel and buttons are both ready, hide the settings window, focus the destination input, hold the remote's voice button, speak, and release to transcribe and paste. Set up keyboard paste permission before the first recording. `Ctrl+Alt+Shift+Space` cancels; the regular recording shortcut also controls the selected input source.
+
+The current adapter targets **RC003, firmware 2671, ATVV 1.0 / ADPCM 16 kHz**. It discovers characteristic paths on each connection, displays battery level, and retries connection failures with a bounded delay. Remote audio stays in memory. Disconnects, missing audio synchronization, and stalled streams discard the incomplete recording. Switching to the computer microphone stops SayRelay's remote notifications without unpairing the remote. Your saved local microphone selection is retained.
+
+The remote is not a PipeWire audio source. On this Ubuntu setup, its voice key arrives as native `F5` events, without the expected ATVV start request. SayRelay therefore reads press/release events from the exact Bluetooth vendor/product (`2717:32B8`), verifies the opened device's identity again, and grabs only that remote to suppress its native key effects. While remote input is selected, other remote buttons are consumed without actions; the computer's keyboard is unaffected. Switching to local input or exiting releases the grab.
+
+The one-time system dialog installs `70-sayrelay-remote.rules`, granting the active desktop user access only to the RC003 input device through udev/logind. The app then runs without root, without membership of the broad `input` group, and without an additional Python Bluetooth package. If graphical authentication is unavailable, run the helper from a terminal:
+
+```bash
+sudo /usr/bin/python3 tools/remote_input_access.py
+# Optional removal; reconnect the remote afterward to revoke the old device ACL.
+sudo /usr/bin/python3 tools/remote_input_access.py --remove
+```
+
+Other firmware, the non-Pro model, and sleep/wake behavior still require validation.
 
 ## Privacy and permissions
 
@@ -120,7 +143,7 @@ See [SECURITY.md](SECURITY.md) for details. Avoid submitting private recordings,
 - Automatic paste depends on focus and the target application's shortcuts. SayRelay does not verify that a particular application received the text.
 - Terminal output must currently be selected manually. Recording defaults to a 120-second limit.
 - Service restart recovery has been verified locally. Full computer restart, suspend/resume, long idle periods, other desktop environments, and other hardware still need testing.
-- Xiaomi remote input, packaged installers, and automatic updates are not implemented.
+- Remote input remains experimental; packaged installers and automatic updates are not implemented.
 
 ## Development and validation
 
@@ -128,13 +151,15 @@ See [SECURITY.md](SECURITY.md) for details. Avoid submitting private recordings,
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-The current suite has 30 tests. Without the local punctuation model, 25 run and 5 model-dependent tests are skipped. With the model installed, all 30 have passed locally. Real Wayland and XWayland input-field paste checks also passed; these checks do not measure speech recognition accuracy.
+The current suite has 62 tests. Without the local punctuation model, 57 run and 5 model-dependent tests are skipped. With the model installed, all 62 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, disconnect cancellation and the shared recognition pipeline. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
 
 Desktop smoke tests open their own input window and require an authorized graphical session:
 
 ```bash
 GDK_BACKEND=wayland .venv/bin/python tests/desktop_smoke.py
 GDK_BACKEND=x11 .venv/bin/python tests/desktop_smoke.py
+# With the remote selected, ready and paste authorized, speak into its own test window:
+GDK_BACKEND=wayland .venv/bin/python tests/remote_smoke.py
 ```
 
 Keep the test window focused. These tests paste into that window without pressing Enter.
@@ -151,8 +176,8 @@ This removes the application's user service, launcher, and shortcuts. Source fil
 
 ## Roadmap and acknowledgments
 
-Next steps are Xiaomi Bluetooth Remote 2 Pro investigation and integration, better mixed-language recognition, and easier installation with verified model downloads. See the [product plan](docs/PRODUCT_PLAN.md).
+Next steps are real remote dictation validation, sleep/reconnect testing, better mixed-language recognition, and easier installation with verified model downloads. See the [product plan](docs/PRODUCT_PLAN.md).
 
-The project was inspired by [Axonkey](https://github.com/leowzz/axonkey), [Mi-Ao](https://github.com/fanxeon/mi-ao), and [SayAll](https://github.com/GetSayAll/remote-mic-app-windows). It uses its own Ubuntu implementation; no application code from those projects was copied.
+The project was inspired by [Axonkey](https://github.com/leowzz/axonkey), [Mi-Ao](https://github.com/fanxeon/mi-ao), and [SayAll](https://github.com/GetSayAll/remote-mic-app-windows). ATVV protocol handling and the ADPCM decoder are adapted from Mi-Ao under MIT; its copyright and full license are included in [licenses/mi-ao-MIT.txt](licenses/mi-ao-MIT.txt). The BlueZ, Ubuntu UI, recognition and delivery integration are implemented in this project.
 
 Application code is licensed under [MIT](LICENSE). Dependencies and model weights retain their upstream licenses; see [third-party notices](THIRD_PARTY_NOTICES.md). Model weights are not included in this repository.
