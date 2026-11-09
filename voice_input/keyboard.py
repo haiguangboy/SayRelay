@@ -195,6 +195,10 @@ class PortalKeyboard:
                 except Exception:
                     pass
 
+    def enter(self):
+        self.key(0xFF0D, True)  # Return, without Control or other modifiers.
+        self.key(0xFF0D, False)
+
     def close(self):
         if self.closed_subscription:
             self.bus.signal_unsubscribe(self.closed_subscription)

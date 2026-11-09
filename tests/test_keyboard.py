@@ -108,6 +108,22 @@ class KeyboardPermissionTests(unittest.TestCase):
         self.assertIsNone(self.keyboard.session)
         self.assertTrue(self.keyboard.restore_token)
 
+    def test_enter_is_one_unmodified_return_press_and_release(self):
+        self.authorize()
+        self.bus.call_sync.reset_mock()
+        self.keyboard.enter()
+        calls = self.bus.call_sync.call_args_list
+        self.assertEqual([call.args[3] for call in calls],
+                         ["NotifyKeyboardKeysym", "NotifyKeyboardKeysym"])
+        self.assertEqual([call.args[4].unpack() for call in calls],
+                         [("/test/session", {}, 0xFF0D, 1), ("/test/session", {}, 0xFF0D, 0)])
+
+    def test_enter_without_permission_never_calls_portal(self):
+        self.bus.call_sync.reset_mock()
+        with self.assertRaises(RuntimeError):
+            self.keyboard.enter()
+        self.bus.call_sync.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

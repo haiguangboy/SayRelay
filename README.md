@@ -23,7 +23,7 @@ Speech recognition runs locally. Chinese output is converted to Simplified Chine
 - A GTK settings window, CLI, and local Unix socket for integrations.
 - A saved input-source switch, BlueZ remote discovery, battery status, and ATVV audio decoding.
 
-SayRelay pastes text without pressing Enter. Choose the input field before recording and keep it focused until delivery completes.
+SayRelay pastes the transcript for review. In remote mode, press the remote's center confirm button to send Enter to the focused application. Choose the input field before recording and keep it focused until delivery completes.
 
 ## Install from source
 
@@ -112,9 +112,11 @@ The [Chinese guide](README.zh-CN.md) includes model options, vocabulary hints, a
 
 Pair **Xiaomi Bluetooth Remote 2 Pro** in Ubuntu's Bluetooth settings, then select **输入来源 → 小米遥控器麦克风** in SayRelay. On first use, click **启用遥控器按键** and authenticate in Ubuntu's system dialog. Wait until the voice channel and buttons are both ready, hide the settings window, focus the destination input, hold the remote's voice button, speak, and release to transcribe and paste. Set up keyboard paste permission before the first recording. `Ctrl+Alt+Shift+Space` cancels; the regular recording shortcut also controls the selected input source.
 
+After the text appears, press the remote's **center confirm button** to send one Enter key press/release to the focused application. Holding the button does not repeat. Confirm is ignored while recording, transcribing, or pasting, and is never queued for later. If keyboard permission needs restoring, return to the input after authorization and press confirm again. Enter follows the application's normal behavior, such as sending a chat message or inserting a newline.
+
 The current adapter targets **RC003, firmware 2671, ATVV 1.0 / ADPCM 16 kHz**. It discovers characteristic paths on each connection, displays battery level, and retries connection failures with a bounded delay. Remote audio stays in memory. Disconnects, missing audio synchronization, and stalled streams discard the incomplete recording. Switching to the computer microphone stops SayRelay's remote notifications without unpairing the remote. Your saved local microphone selection is retained.
 
-The remote is not a PipeWire audio source. On this Ubuntu setup, its voice key arrives as native `F5` events, without the expected ATVV start request. SayRelay therefore reads press/release events from the exact Bluetooth vendor/product (`2717:32B8`), verifies the opened device's identity again, and grabs only that remote to suppress its native key effects. While remote input is selected, other remote buttons are consumed without actions; the computer's keyboard is unaffected. Switching to local input or exiting releases the grab.
+The remote is not a PipeWire audio source. On this Ubuntu setup, its voice key arrives as native `F5` events, without the expected ATVV start request. SayRelay therefore reads press/release events from the exact Bluetooth vendor/product (`2717:32B8`), verifies the opened device's identity again, and grabs only that remote to suppress its native key effects. Voice and confirm have the actions above; the remaining remote buttons are consumed without actions. The computer's keyboard is unaffected. Switching to local input or exiting releases the grab.
 
 The one-time system dialog installs `70-sayrelay-remote.rules`, granting the active desktop user access only to the RC003 input device through udev/logind. The app then runs without root, without membership of the broad `input` group, and without an additional Python Bluetooth package. If graphical authentication is unavailable, run the helper from a terminal:
 
@@ -151,7 +153,7 @@ See [SECURITY.md](SECURITY.md) for details. Avoid submitting private recordings,
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-The current suite has 62 tests. Without the local punctuation model, 57 run and 5 model-dependent tests are skipped. With the model installed, all 62 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, disconnect cancellation and the shared recognition pipeline. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
+The current suite has 72 tests. Without the local punctuation model, 67 run and 5 model-dependent tests are skipped. With the model installed, all 72 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, confirm suppression while busy or unauthorized, disconnect cancellation and the shared recognition pipeline. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
 
 Desktop smoke tests open their own input window and require an authorized graphical session:
 

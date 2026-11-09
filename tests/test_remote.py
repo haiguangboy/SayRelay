@@ -2,7 +2,7 @@
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 from gi.repository import GLib
@@ -10,7 +10,7 @@ from gi.repository import GLib
 from voice_input.atvv import ADPCMDecoder, AudioStream, capabilities, SERVICE_UUID, TX_UUID, RX_UUID, CONTROL_UUID
 from voice_input.config import Config
 from voice_input.remote import RemoteMicrophone, DEVICE, SERVICE, CHAR, BATTERY
-from voice_input.remote_buttons import RemoteButtons, EVIOCGID, EVIOCGRAB, VOICE_KEY
+from voice_input.remote_buttons import RemoteButtons, EVIOCGID, EVIOCGRAB, VOICE_KEY, CONFIRM_KEY
 from voice_input.service import Controller
 from test_pipeline import FakeRecognizer, Keyboard, spin
 
@@ -351,6 +351,71 @@ class RemotePipelineTests(unittest.TestCase):
         self.assertEqual(self.controller.job["state"], "cancelled")
         self.assertIsNone(self.controller.remote.pending_start)
 
+    def test_confirm_sends_one_enter_without_changing_transcript_or_clipboard(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        self.controller.last_text = "待发送文字"
+        for value in [1, 1, 2, 2, 0, 0]:
+            self.controller.remote_buttons._event(1, CONFIRM_KEY, value)
+        self.controller.keyboard.enter.assert_called_once_with()
+        self.assertEqual(self.controller.last_text, "待发送文字")
+        self.mocks[-1].assert_not_called()
+        self.assertEqual(self.controller.status()["remote"]["last_button_action"]["state"], "sent")
+
+    def test_confirm_during_busy_state_is_never_queued(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        for state in ["loading", "recording", "transcribing", "delivering", "error"]:
+            with self.subTest(state=state):
+                self.controller.state = state
+                self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+                self.controller.state = "idle"
+                self.controller.remote_buttons._event(1, CONFIRM_KEY, 2)
+                self.controller.remote_buttons._event(1, CONFIRM_KEY, 0)
+        self.controller.keyboard.enter.assert_not_called()
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.keyboard.enter.assert_called_once_with()
+
+    def test_confirm_while_voice_key_still_held_is_blocked(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        self.controller.remote_buttons.held = True
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.keyboard.enter.assert_not_called()
+
+    def test_confirm_without_authorization_restores_but_never_sends_later(self):
+        self.controller.keyboard.enter = Mock()
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.assertEqual(self.controller.keyboard.connections, 1)
+        self.controller.keyboard.session = "/test/session"
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 2)
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 0)
+        self.controller.keyboard.enter.assert_not_called()
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.keyboard.enter.assert_called_once_with()
+
+    def test_local_mode_and_shutdown_ignore_remote_confirm(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        self.controller.config.input_mode = "local"
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 0)
+        self.controller.config.input_mode = "remote"
+        self.controller.quitting = True
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.keyboard.enter.assert_not_called()
+
+    def test_confirm_failure_is_reported_without_automatic_retry(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock(side_effect=RuntimeError("session ended"))
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 2)
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 0)
+        self.controller.keyboard.enter.assert_called_once_with()
+        self.assertEqual(self.controller.state, "idle")
+        self.assertEqual(self.controller.remote_button_result["state"], "error")
+        self.assertIn("Enter 发送失败", self.controller.message)
+
 
 class RemoteButtonTests(unittest.TestCase):
     def setUp(self):
@@ -435,6 +500,25 @@ class RemoteButtonTests(unittest.TestCase):
             self.buttons._read(42, GLib.IO_IN)
         self.assertEqual(len(self.errors), 1)
         self.assertFalse(self.buttons.held)
+
+    def test_confirm_repeat_and_stray_release_do_not_send_extra_enter(self):
+        confirmed = Mock()
+        self.buttons.confirmed = confirmed
+        for value in [0, 2, 1, 1, *([2] * 200), 0, 0]:
+            self.buttons._event(1, CONFIRM_KEY, value)
+        confirmed.assert_called_once_with()
+        self.assertEqual(self.buttons.status()["confirm_presses"], 1)
+        self.assertEqual(self.presses, [])
+        self.buttons._event(1, CONFIRM_KEY, 1)
+        self.assertEqual(confirmed.call_count, 2)
+
+    def test_disconnect_clears_confirm_hold_without_sending_enter(self):
+        confirmed = Mock()
+        self.buttons.confirmed = confirmed
+        self.buttons.confirm_held = True
+        self.buttons.close()
+        self.assertFalse(self.buttons.confirm_held)
+        confirmed.assert_not_called()
 
 
 if __name__ == "__main__":

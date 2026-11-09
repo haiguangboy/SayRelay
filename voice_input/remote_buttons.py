@@ -1,4 +1,4 @@
-"""Linux evdev push-to-talk, exclusively scoped to Xiaomi RC003 hardware.
+"""Linux evdev remote buttons, exclusively scoped to Xiaomi RC003 hardware.
 
 The optional udev rule grants the active desktop user access to this remote.
 EVIOCGRAB prevents its native F5 repeat and other buttons reaching applications.
@@ -17,6 +17,7 @@ EVENT = struct.Struct("@llHHi")
 EVIOCGID = 0x80084502
 EVIOCGRAB = 0x40044590
 VOICE_KEY = 63  # Linux KEY_F5, from HID Keyboard usage 0x3e.
+CONFIRM_KEY = 28  # Linux KEY_ENTER, from HID Keyboard usage 0x28.
 REMOTE_ID = (5, 0x2717, 0x32B8)
 
 
@@ -32,16 +33,19 @@ def remote_nodes():
 
 
 class RemoteButtons:
-    def __init__(self, pressed, released, failed):
+    def __init__(self, pressed, released, failed, confirmed=None):
         self.pressed, self.released, self.failed = pressed, released, failed
+        self.confirmed = confirmed
         self.fd = None
         self.watch = None
         self.timer = None
         self.enabled = False
         self.held = False
+        self.confirm_held = False
         self.state = "off"
         self.message = "未启用遥控器按键"
         self.presses = 0
+        self.confirm_presses = 0
 
     @property
     def ready(self):
@@ -49,7 +53,7 @@ class RemoteButtons:
 
     def status(self):
         return {"state": self.state, "ready": self.ready, "message": self.message,
-                "voice_presses": self.presses}
+                "voice_presses": self.presses, "confirm_presses": self.confirm_presses}
 
     def enable(self):
         if self.enabled:
@@ -81,9 +85,10 @@ class RemoteButtons:
             self.fd = fd
             fd = None
             self.held = False
+            self.confirm_held = False
             self.watch = GLib.io_add_watch(self.fd, GLib.PRIORITY_DEFAULT,
                                           GLib.IO_IN | GLib.IO_ERR | GLib.IO_HUP, self._read)
-            self.state, self.message = "ready", "遥控器按键已接通（遥控器原生按键已接管）"
+            self.state, self.message = "ready", "遥控器按键已接通（语音键录音，确定键 Enter）"
         except PermissionError:
             self.state, self.message = "permission", "请点“启用遥控器按键”，完成一次系统设备授权"
         except OSError as error:
@@ -96,7 +101,18 @@ class RemoteButtons:
     def _event(self, kind, code, value):
         if kind == 0 and code == 3:  # SYN_DROPPED: lost release is unsafe.
             raise OSError("遥控器按键事件丢失，本次录音已取消")
-        if kind != 1 or code != VOICE_KEY:
+        if kind != 1:
+            return
+        if code == CONFIRM_KEY:
+            if value == 1 and not self.confirm_held:
+                self.confirm_held = True
+                self.confirm_presses += 1
+                if self.confirmed:
+                    self.confirmed()
+            elif value == 0:
+                self.confirm_held = False
+            return
+        if code != VOICE_KEY:
             return
         if value == 1 and not self.held:
             self.held = True
@@ -135,6 +151,7 @@ class RemoteButtons:
             os.close(self.fd)
             self.fd = None
         self.held = False
+        self.confirm_held = False
 
     def close(self):
         self.enabled = False

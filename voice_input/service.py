@@ -34,7 +34,9 @@ class Controller:
         self.microphone = Microphone()
         self.capture = None
         self.remote = RemoteMicrophone(self._remote_requested, self._remote_ended, self._remote_failed)
-        self.remote_buttons = RemoteButtons(self._remote_requested, self._remote_ended, self._remote_failed)
+        self.remote_buttons = RemoteButtons(self._remote_requested, self._remote_ended,
+                                            self._remote_failed, self._remote_confirmed)
+        self.remote_button_result = None
         self.remote.button_control = True
         self.remote_setup_process = None
         self.remote_setup_message = ""
@@ -97,6 +99,7 @@ class Controller:
         elapsed = time.monotonic() - self.capture.started if self.state == "recording" else 0
         remote = self.remote.status()
         remote["buttons"] = self.remote_buttons.status()
+        remote["last_button_action"] = self.remote_button_result
         remote["ready"] = remote["ready"] and self.remote_buttons.ready
         remote["setup_running"] = self.remote_setup_process is not None
         remote["setup_message"] = self.remote_setup_message
@@ -134,6 +137,29 @@ class Controller:
             self.remote.discard()
             self._finish(self.job, "error", message)
             notify("遥控器录音未完成", message, persistent=True)
+
+    def _remote_confirmed(self):
+        if self.config.input_mode != "remote" or self.quitting:
+            return
+        result = {"action": "enter", "state": "blocked"}
+        self.remote_button_result = result
+        if self.state != "idle" or self.remote_buttons.held:
+            result["message"] = "请等待录音、转写和粘贴完成后，再按确定键"
+            notify("确定键尚未发送", result["message"])
+            return
+        if not self.keyboard.session:
+            self.keyboard.connect()
+            result["message"] = "键盘控制尚未就绪，恢复授权后请回到目标输入框，再按确定键"
+            notify("确定键尚未发送", result["message"], persistent=True)
+            return
+        try:
+            self.keyboard.enter()
+        except Exception as error:
+            result.update(state="error", message=f"Enter 发送失败，请检查键盘授权：{error}")
+            notify("确定键未完成", result["message"], persistent=True)
+        else:
+            result.update(state="sent", message="已向当前窗口发送 Enter")
+        self.message = result["message"]
 
     def _enable_remote_buttons(self):
         if self.remote_setup_process is not None:

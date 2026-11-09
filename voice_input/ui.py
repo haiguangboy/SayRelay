@@ -144,7 +144,8 @@ class Window(Gtk.Window):
         for button in [copy_button, hide_button, quit_button]:
             buttons.pack_start(button, False, False, 0)
         content.pack_start(buttons, False, False, 0)
-        hint = Gtk.Label(label="先点选目标输入框，再按快捷键。只粘贴，不自动发送。", xalign=0)
+        hint = Gtk.Label(label="先点选目标输入框。语音转写后粘贴；遥控器确定键发送 Enter。", xalign=0)
+        hint.set_line_wrap(True)
         hint.get_style_context().add_class("subtitle")
         content.pack_start(hint, False, False, 0)
         GLib.timeout_add(250, self.refresh)
