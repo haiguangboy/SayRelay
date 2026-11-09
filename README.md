@@ -10,7 +10,7 @@ SayRelay turns microphone audio into text and pastes it into the focused input f
 
 Speech recognition runs locally. Chinese output is converted to Simplified Chinese and receives punctuation from a local model. No cloud transcription account or API key is required.
 
-**Status: 0.1.0 prototype, with experimental remote input.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. Choose the computer's microphone or Xiaomi Bluetooth Remote 2 Pro in settings. Real remote recording, local transcription, and paste into a Wayland test input have passed; the user also confirmed dictation into Codex. The settings window currently uses Chinese labels.
+**Status: 0.1.0 prototype, with experimental remote input.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. Choose the computer's microphone or Xiaomi Bluetooth Remote 2 Pro in settings. Real remote recording, local transcription, and paste into a Wayland test input have passed. The user also confirmed dictation and confirm-to-send in Codex, plus Home overview, left/right selection and switching, and confirm-to-activate. The settings window currently uses Chinese labels.
 
 ## What works today
 
@@ -22,6 +22,7 @@ Speech recognition runs locally. Chinese output is converted to Simplified Chine
 - Visible warnings and preserved text when automatic paste fails.
 - A GTK settings window, CLI, and local Unix socket for integrations.
 - A saved input-source switch, BlueZ remote discovery, battery status, and ATVV audio decoding.
+- Remote voice button for dictation, center confirm for Enter, and Home / left / right for application navigation.
 
 SayRelay pastes the transcript for review. In remote mode, press the remote's center confirm button to send Enter to the focused application. Choose the input field before recording and keep it focused until delivery completes.
 
@@ -120,6 +121,8 @@ After the text appears, press the remote's **center confirm button** to send one
 | Left / right | System backward / forward application switch | Select a window to the left / right |
 | Center confirm | Enter in the focused application | Activate the selected window |
 
+Two workflows have been confirmed on the tested RC003: **hold voice → speak → release → review pasted text → confirm to send**, and **Home → left/right → confirm to activate an application**. Press Home again to close the overview. These results apply to the tested Ubuntu 24.04 / GNOME 46 setup; other desktop environments and remote firmware are not covered by this acceptance.
+
 Home uses GNOME's native overview, similar to the keyboard's Super/Windows key. It shows windows according to GNOME's workspace layout. The first navigation action focuses the window picker. Outside the overview, SayRelay reads the current `switch-applications` / `switch-applications-backward` shortcuts (normally Super+Tab / Shift+Super+Tab) and sends a complete press/release sequence. This follows GNOME's recent-application order; it is not a separate browser-style back/forward history, and repeated taps may alternate recent apps. Use Home for explicit visual selection.
 
 Holding a button does not repeat. Navigation and confirm are blocked during recording, transcription, or paste, and are never queued. After restoring keyboard authorization, press the desired button again. During overview animations and briefly after activating a window, confirm is blocked to avoid submitting a message immediately in the newly focused app. Closing the overview with a mouse or keyboard resets remote selection state. Desktop navigation targets GNOME 46 on Ubuntu 24.04; it does not install extensions or change system shortcuts.
@@ -163,7 +166,7 @@ See [SECURITY.md](SECURITY.md) for details. Avoid submitting private recordings,
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-The current suite has 90 tests. Without the local punctuation model, 85 run and 5 model-dependent tests are skipped. With the model installed, all 90 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, desktop navigation, confirm suppression while busy or unauthorized, disconnect cancellation and the shared recognition pipeline. Navigation tests simulate GNOME responses and do not replace a real desktop trial. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
+The current suite has 90 tests. Without the local punctuation model, 85 run and 5 model-dependent tests are skipped. With the model installed, all 90 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, desktop navigation, confirm suppression while busy or unauthorized, disconnect cancellation and the shared recognition pipeline. Navigation tests simulate GNOME responses; the user separately confirmed the physical remote's Home, left/right, and confirm workflow. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
 
 Desktop smoke tests open their own input window and require an authorized graphical session:
 
