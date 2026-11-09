@@ -19,16 +19,16 @@ git status
 git diff
 ```
 
-## 首次上传 GitHub
+## GitHub 仓库
 
-本地整理和公开发布是两个步骤。确定仓库名、账号和许可证后再上传；以下命令中的 `OWNER/REPOSITORY` 需要替换为真实目标：
+公开仓库为 [haiguangboy/SayRelay](https://github.com/haiguangboy/SayRelay)。已经配置该远程仓库的本地工作目录可使用：
 
 ```bash
-gh auth login --hostname github.com --web
-gh repo create OWNER/REPOSITORY --public --source . --remote origin --push
+git remote -v
+git push -u origin main
 ```
 
-如仓库已存在，配置它的远程地址后推送 `main`。当前没有发布安装包，先用源码发布收集 Ubuntu 用户反馈。
+新环境可通过 GitHub CLI 登录 HTTPS，或使用已授权的 SSH 密钥进行推送。当前没有发布安装包，先用源码发布收集 Ubuntu 用户反馈。
 
 ## 每次发布的检查
 

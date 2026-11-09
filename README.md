@@ -26,7 +26,14 @@ SayRelay pastes text without pressing Enter. Choose the input field before recor
 
 You need an Ubuntu 24.04 GNOME graphical session, Python 3.12, and a microphone. Internet access is needed for the initial dependencies and model downloads; dictation uses the downloaded models locally.
 
-Clone or extract this repository into a permanent location, open a terminal there, then install the system dependencies:
+Clone this repository into a permanent location and enter the source directory:
+
+```bash
+git clone https://github.com/haiguangboy/SayRelay.git
+cd SayRelay
+```
+
+Then install the system dependencies:
 
 ```bash
 sudo apt-get update
@@ -90,7 +97,7 @@ voice-input transcribe /absolute/path/sample.wav --wait
 voice-input insert 'Text from another program'
 ```
 
-The proposed public name is SayRelay; the current command, service, Python package, and configuration paths retain the `voice-input` / `voice_input` names.
+The public name is SayRelay; the current command, service, Python package, and configuration paths retain the `voice-input` / `voice_input` names.
 
 The [Chinese guide](README.zh-CN.md) includes model options, vocabulary hints, and the JSON socket interface. The socket is restricted to the same user and does not expose an HTTP service.
 

@@ -4,7 +4,7 @@
 
 Ubuntu 本机麦克风 → 本地 Whisper → 简体中文与标点 → 当前应用输入框。
 
-当前为 **0.1.0 原型**，以 SayRelay 为拟定产品名。支持本机麦克风，小米蓝牙遥控器适配尚未实现。代码使用 MIT 许可证，依赖和模型分别遵守上游许可。当前命令、服务名和配置路径仍使用 `voice-input`，安装位置保持不变。
+当前为 **0.1.0 原型**，产品名为 SayRelay。支持本机麦克风，小米蓝牙遥控器适配尚未实现。代码使用 MIT 许可证，依赖和模型分别遵守上游许可。当前命令、服务名和配置路径仍使用 `voice-input`，安装位置保持不变。
 
 项目文档：[架构与模块](docs/ARCHITECTURE.md) · [产品路线](docs/PRODUCT_PLAN.md) · [版本记录](CHANGELOG.md) · [开发协作](CONTRIBUTING.md) · [发布流程](docs/RELEASE.md) · [第三方组件](THIRD_PARTY_NOTICES.md)。
 
@@ -70,6 +70,9 @@ printf '%s' '来自管道的文字' | voice-input insert -
 从源码安装，面向 Ubuntu 24.04 自带的 Python 3.12 和 GNOME 桌面。首次安装依赖和下载模型需要联网，日常识别使用本地模型：
 
 ```bash
+git clone https://github.com/haiguangboy/SayRelay.git
+cd SayRelay
+
 sudo apt-get update
 sudo apt-get install -y python3-venv python3-gi python3-gi-cairo \
   gir1.2-gtk-3.0 pipewire-bin pulseaudio-utils wl-clipboard libnotify-bin curl

@@ -17,6 +17,11 @@ dependencies = [
   "sherpa-onnx==2.0.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/haiguangboy/SayRelay"
+Repository = "https://github.com/haiguangboy/SayRelay"
+Issues = "https://github.com/haiguangboy/SayRelay/issues"
+
 [project.scripts]
 voice-input = "voice_input.cli:main"
 
