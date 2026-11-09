@@ -10,7 +10,7 @@ SayRelay turns microphone audio into text and pastes it into the focused input f
 
 Speech recognition runs locally. Chinese output is converted to Simplified Chinese and receives punctuation from a local model. No cloud transcription account or API key is required.
 
-**Status: 0.1.0 prototype, with experimental remote input.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. Choose the computer's microphone or Xiaomi Bluetooth Remote 2 Pro in settings. The remote's real GATT handshake is verified; speech capture and desktop delivery still require the manual remote test described below. The settings window currently uses Chinese labels.
+**Status: 0.1.0 prototype, with experimental remote input.** Tested on Ubuntu 24.04 with GNOME 46 and Wayland. Choose the computer's microphone or Xiaomi Bluetooth Remote 2 Pro in settings. Real remote recording, local transcription, and paste into a Wayland test input have passed; the user also confirmed dictation into Codex. The settings window currently uses Chinese labels.
 
 ## What works today
 
@@ -124,7 +124,7 @@ sudo /usr/bin/python3 tools/remote_input_access.py
 sudo /usr/bin/python3 tools/remote_input_access.py --remove
 ```
 
-Other firmware, the non-Pro model, and sleep/wake behavior still require validation.
+A measured 6.255-second remote recording (417 packets) took 1.49 seconds to transcribe, including punctuation, and about 1.90 seconds from release to text appearing in the test input. The test read the actual input contents and confirmed they matched the transcript, with no native F5 events reaching the window. This is one local measurement with the `small` model, not an accuracy benchmark. Other firmware, the non-Pro model, and sleep/wake behavior still require validation.
 
 ## Privacy and permissions
 
@@ -164,7 +164,7 @@ GDK_BACKEND=wayland .venv/bin/python tests/remote_smoke.py
 
 Keep the test window focused. These tests paste into that window without pressing Enter.
 
-Further documentation is currently in Chinese: [architecture](docs/ARCHITECTURE.md), [validation record](VALIDATION.md), [contributing](CONTRIBUTING.md), and [release process](docs/RELEASE.md). The first GitHub Actions run passed on Ubuntu 24.04; it runs the 25 tests that do not require local model weights and skips the 5 model-dependent tests. Desktop integration still requires a real graphical session.
+Further documentation is currently in Chinese: [architecture](docs/ARCHITECTURE.md), [validation record](VALIDATION.md), [contributing](CONTRIBUTING.md), and [release process](docs/RELEASE.md). The first GitHub Actions run passed on Ubuntu 24.04 with the original suite of 25 tests and 5 model-dependent skips. The current suite counts are listed above. Desktop integration still requires a real graphical session.
 
 ## Uninstall
 
@@ -176,7 +176,7 @@ This removes the application's user service, launcher, and shortcuts. Source fil
 
 ## Roadmap and acknowledgments
 
-Next steps are real remote dictation validation, sleep/reconnect testing, better mixed-language recognition, and easier installation with verified model downloads. See the [product plan](docs/PRODUCT_PLAN.md).
+Next steps are longer remote dictation trials, sleep/reconnect testing, better mixed-language recognition, and easier installation with verified model downloads. See the [product plan](docs/PRODUCT_PLAN.md).
 
 The project was inspired by [Axonkey](https://github.com/leowzz/axonkey), [Mi-Ao](https://github.com/fanxeon/mi-ao), and [SayAll](https://github.com/GetSayAll/remote-mic-app-windows). ATVV protocol handling and the ADPCM decoder are adapted from Mi-Ao under MIT; its copyright and full license are included in [licenses/mi-ao-MIT.txt](licenses/mi-ao-MIT.txt). The BlueZ, Ubuntu UI, recognition and delivery integration are implemented in this project.
 

@@ -4,13 +4,13 @@
 
 Ubuntu 本机麦克风 / 小米遥控器 → 本地 Whisper → 简体中文与标点 → 当前应用输入框。
 
-当前为 **0.1.0 原型，遥控器输入为实验功能**，产品名为 SayRelay。设置可切换本机麦克风与小米蓝牙遥控器。已通过真机语音服务握手；遥控器实录与粘贴仍需人工测试。代码使用 MIT 许可证，依赖和模型分别遵守上游许可。当前命令、服务名和配置路径仍使用 `voice-input`，安装位置保持不变。
+当前为 **0.1.0 原型，遥控器输入为实验功能**，产品名为 SayRelay。设置可切换本机麦克风与小米蓝牙遥控器。已通过真机录音、本地转写和 Wayland 独立输入框实际粘贴测试，用户也已确认通过遥控器向 Codex 输入文字。代码使用 MIT 许可证，依赖和模型分别遵守上游许可。当前命令、服务名和配置路径仍使用 `voice-input`，安装位置保持不变。
 
 项目文档：[架构与模块](docs/ARCHITECTURE.md) · [产品路线](docs/PRODUCT_PLAN.md) · [版本记录](CHANGELOG.md) · [开发协作](CONTRIBUTING.md) · [发布流程](docs/RELEASE.md) · [第三方组件](THIRD_PARTY_NOTICES.md)。
 
-[GitHub Actions](https://github.com/haiguangboy/SayRelay/actions/workflows/tests.yml) 首次远程运行已通过：Ubuntu 24.04 上的 25 项无模型测试通过，5 项依赖本地模型的测试跳过。含模型的本机环境共 30 项通过；远程测试不验证麦克风、桌面授权或实际输入框粘贴。
+[GitHub Actions](https://github.com/haiguangboy/SayRelay/actions/workflows/tests.yml) 首次远程运行已通过：当时 Ubuntu 24.04 上的 25 项无模型测试通过，5 项依赖本地模型的测试跳过。遥控器适配后的本机环境现有 62 项测试通过，干净源码包中 57 项通过、5 项模型测试跳过；远程单元测试不验证麦克风、桌面授权或实际输入框粘贴。
 
-本机录音、转写、取消，以及原生 Wayland / XWayland 输入框粘贴验证已通过，详见 [验证记录](VALIDATION.md)。Codex 和其他实际应用的日常体验仍需要用户试用。
+本机录音、转写、取消，以及原生 Wayland / XWayland 输入框粘贴验证已通过。遥控器一次 6.255 秒 / 417 包的实录，含标点的转写耗时约 1.49 秒，松手至测试输入框出现文字约 1.90 秒；读取控件文字确认与识别结果一致，且没有 F5 泄漏。这是单次本机测量，不代表识别准确率评测。详见 [验证记录](VALIDATION.md)，更多应用和长时间日常使用仍需试用。
 
 首版面向 Ubuntu 24.04 / GNOME Wayland。按 `Ctrl+Alt+空格` 开始录音，再按一次结束、转写并粘贴；`Ctrl+Alt+Shift+空格` 取消。先点选 Codex 或其他应用的输入框，转写期间保持焦点。只粘贴，不按回车发送。
 
