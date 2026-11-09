@@ -10,9 +10,9 @@ from gi.repository import GLib
 from voice_input.atvv import ADPCMDecoder, AudioStream, capabilities, SERVICE_UUID, TX_UUID, RX_UUID, CONTROL_UUID
 from voice_input.config import Config
 from voice_input.remote import RemoteMicrophone, DEVICE, SERVICE, CHAR, BATTERY
-from voice_input.remote_buttons import RemoteButtons, EVIOCGID, EVIOCGRAB, VOICE_KEY, CONFIRM_KEY
+from voice_input.remote_buttons import RemoteButtons, EVIOCGID, EVIOCGRAB, VOICE_KEY, CONFIRM_KEY, NAVIGATION_KEYS
 from voice_input.service import Controller
-from test_pipeline import FakeRecognizer, Keyboard, spin
+from test_pipeline import FakeRecognizer, Keyboard, Desktop, spin
 
 
 CAPS = bytes.fromhex("0b 01 00 02 03 00 78 00 00")
@@ -253,6 +253,7 @@ class RemotePipelineTests(unittest.TestCase):
         self.patches = [patch("voice_input.service.Config.load", return_value=Config()),
                         patch("voice_input.service.Recognizer", FakeRecognizer),
                         patch("voice_input.service.PortalKeyboard", Keyboard),
+                        patch("voice_input.service.GnomeDesktop", Desktop),
                         patch("voice_input.service.notify"), patch("voice_input.service.copy_text")]
         self.mocks = [p.start() for p in self.patches]
         FakeRecognizer.gate = None
@@ -416,6 +417,55 @@ class RemotePipelineTests(unittest.TestCase):
         self.assertEqual(self.controller.remote_button_result["state"], "error")
         self.assertIn("Enter 发送失败", self.controller.message)
 
+    def test_overview_confirm_never_calls_chat_enter(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        self.controller.desktop.confirm_overview = Mock(return_value=True)
+        self.controller.remote_buttons._event(1, CONFIRM_KEY, 1)
+        self.controller.keyboard.enter.assert_not_called()
+        self.assertEqual(self.controller.remote_button_result["action"], "overview_confirm")
+
+    def test_navigation_uses_desktop_and_keeps_clipboard_unchanged(self):
+        self.controller.keyboard.session = "/test/session"
+        self.controller.desktop.toggle_overview = Mock(return_value={"action":"overview", "message":"opened"})
+        self.controller.desktop.move = Mock(return_value={"action":"switch_left", "message":"switched"})
+        for code in NAVIGATION_KEYS:
+            for value in [1, 1, 2, 0]:
+                self.controller.remote_buttons._event(1, code, value)
+        self.controller.desktop.toggle_overview.assert_called_once_with()
+        self.assertEqual(self.controller.desktop.move.call_args_list, [unittest.mock.call("left"), unittest.mock.call("right")])
+        self.mocks[-1].assert_not_called()
+
+    def test_busy_navigation_and_authorization_never_queue_actions(self):
+        self.controller.desktop.toggle_overview = Mock()
+        self.controller.desktop.move = Mock()
+        for state in ["loading", "recording", "transcribing", "delivering"]:
+            self.controller.state = state
+            self.controller._remote_navigated("home")
+        self.controller.state = "idle"
+        self.controller._remote_navigated("right")
+        self.assertEqual(self.controller.keyboard.connections, 1)
+        self.controller.desktop.toggle_overview.assert_not_called()
+        self.controller.desktop.move.assert_not_called()
+
+    def test_local_and_shutdown_navigation_is_ignored(self):
+        self.controller.desktop.toggle_overview = Mock()
+        self.controller.config.input_mode = "local"
+        self.controller._remote_navigated("home")
+        self.controller.config.input_mode = "remote"
+        self.controller.quitting = True
+        self.controller._remote_navigated("home")
+        self.controller.desktop.toggle_overview.assert_not_called()
+
+    def test_overview_transition_blocks_enter_without_falling_back(self):
+        from voice_input.desktop import DesktopNotReady
+        self.controller.keyboard.session = "/test/session"
+        self.controller.keyboard.enter = Mock()
+        self.controller.desktop.confirm_overview = Mock(side_effect=DesktopNotReady("waiting"))
+        self.controller._remote_confirmed()
+        self.controller.keyboard.enter.assert_not_called()
+        self.assertEqual(self.controller.remote_button_result["state"], "blocked")
+
 
 class RemoteButtonTests(unittest.TestCase):
     def setUp(self):
@@ -519,6 +569,18 @@ class RemoteButtonTests(unittest.TestCase):
         self.buttons.close()
         self.assertFalse(self.buttons.confirm_held)
         confirmed.assert_not_called()
+
+    def test_navigation_keys_ignore_repeat_and_recover_after_disconnect(self):
+        self.buttons.navigated = Mock()
+        for code in NAVIGATION_KEYS:
+            for value in [0, 2, 1, 1, 2, 0]:
+                self.buttons._event(1, code, value)
+        self.assertEqual([call.args[0] for call in self.buttons.navigated.call_args_list],
+                         ["home", "left", "right"])
+        self.assertEqual(self.buttons.status()["navigation_presses"], {"home":1, "left":1, "right":1})
+        self.buttons._event(1, 102, 1)
+        self.buttons.close()
+        self.assertFalse(self.buttons.navigation_held)
 
 
 if __name__ == "__main__":

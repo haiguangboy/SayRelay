@@ -28,6 +28,7 @@ delivery.py / keyboard.py → 当前焦点输入框
 - `keyboard.py`：通过 xdg-desktop-portal 发送 Ctrl+V / Ctrl+Shift+V，并持久化恢复授权。
 - `service.py`：录音状态机、异步任务、取消、失败保留和本地 socket 接口。
 - `ui.py`：GTK 设置窗口，不负责识别算法。
+- `desktop.py`：GNOME 真实概览状态、窗口选择与现有系统应用切换快捷键。
 - `install.py`：用户级 launcher、systemd 服务和 GNOME 快捷键安装。
 - `tools/remote_input_access.py`：一次性系统设备授权，仅安装匹配 RC003 的 udev 规则。
 
@@ -41,9 +42,11 @@ delivery.py / keyboard.py → 当前焦点输入框
 
 `Config.input_mode` 默认为 `local`，旧配置兼容；`remote` 时同时启用 BlueZ 音频与设备专属按键适配器。切换只允许在空闲时进行，并保留原 PipeWire `source` 选择。Controller 的 `capture` 指向实际音源，后续识别、取消和交付复用同一条流水线。
 
-本机 RC003 的语音键产生 F5，未产生预期的 ATVV START_SEARCH，因此实际按键由 evdev 驱动，GATT 的重复开始请求不再二次切换录音。只打开蓝牙 `2717:32B8` 的输入节点，并用 EVIOCGID 再次验证身份，再执行 EVIOCGRAB；不打开电脑键盘。按下录音、松开转写，内核重复事件被忽略；按键断连或 SYN_DROPPED 丢弃当前录音。确定键将 Linux KEY_ENTER 转为桌面 portal 的一次 Return 按下/释放；仅空闲且键盘授权就绪时执行，按住语音键期间也拒绝，按住确定键不连发。忙碌或恢复授权后不会补发旧动作，失败不重试；状态接口提供物理按键次数与最近 Enter 结果，不宣称目标应用已发送消息。其余遥控器按键暂不执行动作，关闭文件描述符即恢复原生事件。
+本机 RC003 的语音键产生 F5，未产生预期的 ATVV START_SEARCH，因此实际按键由 evdev 驱动，GATT 的重复开始请求不再二次切换录音。只打开蓝牙 `2717:32B8` 的输入节点，并用 EVIOCGID 再次验证身份，再执行 EVIOCGRAB；不打开电脑键盘。按下录音、松开转写，内核重复事件被忽略；按键断连或 SYN_DROPPED 丢弃当前录音。确定键将 Linux KEY_ENTER 转为桌面 portal 的一次 Return 按下/释放；仅空闲且键盘授权就绪时执行，按住语音键期间也拒绝，按住确定键不连发。忙碌或恢复授权后不会补发旧动作，失败不重试；状态接口提供物理按键次数与最近按键动作结果，不宣称目标应用已发送消息。Home 与左右键执行下述导航，其余遥控器按键暂不执行动作，关闭文件描述符即恢复原生事件。
 
 首次通过 pkexec / sudo 安装固定 udev 规则，让 logind 为活动桌面用户授予这一设备的 ACL；运行服务仍为普通用户。规则安装与桌面自动粘贴的 portal 权限是两件独立的系统授权。
+
+Home（Linux KEY_HOME 102）、左（105）、右（106）也经 evdev 去重。`GnomeDesktop` 使用公开 D-Bus OverviewActive 属性，Home 请求切换可见性，导航前读取实际状态，监听 PropertiesChanged 重置选择焦点；不依赖一直保持为真的本地模式标记。概览首次选择以 Tab 聚焦窗口缩略图，再发普通方向键；确定键激活窗口。若概览关闭则方向键改为当前 GSettings 中 switch-applications / backward 的完整快捷键，释放全部修饰键，不持有 Super。不安装 Shell 扩展、不调用 Eval、不读取窗口列表、不修改快捷键。概览动画与进入窗口后有短暂保护间隔，失败不补发；不能据此宣称完全消除外部焦点变化的竞态。应用顺序由 GNOME 决定，不维护独立使用历史。
 
 BlueZ 仅对已确认的 ATVV TX 写入命令，动态查找特征路径；先完成两路通知订阅，再请求能力。连接以 generation 标记异步回复，切换或断连后忽略旧回复。音频只留内存，先冻结 PCM 再提交识别线程。新录音在明确的 16 kHz AUDIO_START 后以 predictor/index=0 初始化，兼容固件省略 AUDIO_SYNC；收到 AUDIO_SYNC 时重置解码状态。既无开始消息也无同步信息的音频不被当作有效录音。断连、持续无音频、格式错误均丢弃未完成结果。
 

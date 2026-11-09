@@ -199,6 +199,16 @@ class PortalKeyboard:
         self.key(0xFF0D, True)  # Return, without Control or other modifiers.
         self.key(0xFF0D, False)
 
+    def shortcut(self, keysym, modifiers=()):
+        pressed = []
+        try:
+            for key in [*modifiers, keysym]:
+                self.key(key, True)
+                pressed.append(key)
+        finally:
+            for key in reversed(pressed):
+                self.key(key, False)
+
     def close(self):
         if self.closed_subscription:
             self.bus.signal_unsubscribe(self.closed_subscription)

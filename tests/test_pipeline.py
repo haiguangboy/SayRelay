@@ -50,6 +50,17 @@ class Keyboard:
         pass
 
 
+class Desktop:
+    def __init__(self, keyboard):
+        pass
+
+    def confirm_overview(self):
+        return False
+
+    def close(self):
+        pass
+
+
 class FakeRecognizer:
     gate = None
 
@@ -67,6 +78,7 @@ class PipelineTests(unittest.TestCase):
         self.patches = [patch("voice_input.service.Config.load", return_value=Config()),
                         patch("voice_input.service.Recognizer", FakeRecognizer),
                         patch("voice_input.service.PortalKeyboard", Keyboard),
+                        patch("voice_input.service.GnomeDesktop", Desktop),
                         patch("voice_input.service.notify"),
                         patch("voice_input.service.copy_text")]
         self.mocks = [p.start() for p in self.patches]

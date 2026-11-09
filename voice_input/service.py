@@ -17,6 +17,7 @@ from gi.repository import GLib
 from .audio import Microphone, read_pcm
 from .config import Config, ROOT, RUNTIME_DIR, SOCKET_PATH
 from .delivery import copy_text, notify
+from .desktop import DesktopNotReady, GnomeDesktop
 from .keyboard import PortalKeyboard
 from .recognizer import Recognizer
 from .remote import RemoteMicrophone
@@ -35,7 +36,8 @@ class Controller:
         self.capture = None
         self.remote = RemoteMicrophone(self._remote_requested, self._remote_ended, self._remote_failed)
         self.remote_buttons = RemoteButtons(self._remote_requested, self._remote_ended,
-                                            self._remote_failed, self._remote_confirmed)
+                                            self._remote_failed, self._remote_confirmed,
+                                            self._remote_navigated)
         self.remote_button_result = None
         self.remote.button_control = True
         self.remote_setup_process = None
@@ -46,6 +48,7 @@ class Controller:
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="recognition")
         self.keyboard_message = "尚未启用自动粘贴"
         self.keyboard = PortalKeyboard(self._keyboard_changed)
+        self.desktop = GnomeDesktop(self.keyboard)
         self.window = None
         self.quitting = False
         if self.config.input_mode == "remote":
@@ -153,12 +156,42 @@ class Controller:
             notify("确定键尚未发送", result["message"], persistent=True)
             return
         try:
-            self.keyboard.enter()
+            if self.desktop.confirm_overview():
+                result.update(action="overview_confirm", state="sent", message="已请求进入选中的应用")
+            else:
+                self.keyboard.enter()
+                result.update(state="sent", message="已向当前窗口发送 Enter")
+        except DesktopNotReady as error:
+            result["message"] = str(error)
+            notify("确定键尚未发送", result["message"])
         except Exception as error:
             result.update(state="error", message=f"Enter 发送失败，请检查键盘授权：{error}")
             notify("确定键未完成", result["message"], persistent=True)
-        else:
-            result.update(state="sent", message="已向当前窗口发送 Enter")
+        self.message = result["message"]
+
+    def _remote_navigated(self, action):
+        if self.config.input_mode != "remote" or self.quitting:
+            return
+        result = {"action": action, "state": "blocked"}
+        self.remote_button_result = result
+        if self.state != "idle" or self.remote_buttons.held:
+            result["message"] = "请等待录音、转写和粘贴完成后，再切换应用"
+            notify("应用尚未切换", result["message"])
+            return
+        if not self.keyboard.session:
+            self.keyboard.connect()
+            result["message"] = "键盘控制尚未就绪，恢复授权后请再次按遥控器按键"
+            notify("应用尚未切换", result["message"], persistent=True)
+            return
+        try:
+            result.update(self.desktop.toggle_overview() if action == "home" else self.desktop.move(action))
+            result["state"] = "sent"
+        except DesktopNotReady as error:
+            result["message"] = str(error)
+            notify("应用尚未切换", result["message"])
+        except Exception as error:
+            result.update(state="error", message=f"应用切换未完成：{error}")
+            notify("应用切换未完成", result["message"], persistent=True)
         self.message = result["message"]
 
     def _enable_remote_buttons(self):
@@ -443,6 +476,7 @@ class Controller:
         self.microphone.discard()
         self.remote_buttons.close()
         self.remote.close()
+        self.desktop.close()
         if self.remote_setup_process and self.remote_setup_process.poll() is None:
             try:
                 self.remote_setup_process.terminate()

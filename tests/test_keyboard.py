@@ -124,6 +124,23 @@ class KeyboardPermissionTests(unittest.TestCase):
             self.keyboard.enter()
         self.bus.call_sync.assert_not_called()
 
+    def test_application_shortcut_releases_all_keys_in_reverse_order(self):
+        with patch.object(self.keyboard, "key") as key:
+            self.keyboard.shortcut(0xFF09, [0xFFEB, 0xFFE1])
+        self.assertEqual([call.args for call in key.call_args_list],
+                         [(0xFFEB, True), (0xFFE1, True), (0xFF09, True),
+                          (0xFF09, False), (0xFFE1, False), (0xFFEB, False)])
+
+    def test_failed_shortcut_press_releases_prior_modifiers(self):
+        def press(keysym, pressed):
+            if keysym == 0xFF09 and pressed:
+                raise RuntimeError("failed")
+        with patch.object(self.keyboard, "key", side_effect=press) as key:
+            with self.assertRaises(RuntimeError):
+                self.keyboard.shortcut(0xFF09, [0xFFEB, 0xFFE1])
+        self.assertEqual([call.args for call in key.call_args_list][-2:],
+                         [(0xFFE1, False), (0xFFEB, False)])
+
 
 if __name__ == "__main__":
     unittest.main()

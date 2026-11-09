@@ -18,6 +18,7 @@ EVIOCGID = 0x80084502
 EVIOCGRAB = 0x40044590
 VOICE_KEY = 63  # Linux KEY_F5, from HID Keyboard usage 0x3e.
 CONFIRM_KEY = 28  # Linux KEY_ENTER, from HID Keyboard usage 0x28.
+NAVIGATION_KEYS = {102: "home", 105: "left", 106: "right"}
 REMOTE_ID = (5, 0x2717, 0x32B8)
 
 
@@ -33,9 +34,12 @@ def remote_nodes():
 
 
 class RemoteButtons:
-    def __init__(self, pressed, released, failed, confirmed=None):
+    def __init__(self, pressed, released, failed, confirmed=None, navigated=None):
         self.pressed, self.released, self.failed = pressed, released, failed
         self.confirmed = confirmed
+        self.navigated = navigated
+        self.navigation_held = set()
+        self.navigation_presses = {action: 0 for action in NAVIGATION_KEYS.values()}
         self.fd = None
         self.watch = None
         self.timer = None
@@ -53,7 +57,8 @@ class RemoteButtons:
 
     def status(self):
         return {"state": self.state, "ready": self.ready, "message": self.message,
-                "voice_presses": self.presses, "confirm_presses": self.confirm_presses}
+                "voice_presses": self.presses, "confirm_presses": self.confirm_presses,
+                "navigation_presses": dict(self.navigation_presses)}
 
     def enable(self):
         if self.enabled:
@@ -86,9 +91,10 @@ class RemoteButtons:
             fd = None
             self.held = False
             self.confirm_held = False
+            self.navigation_held.clear()
             self.watch = GLib.io_add_watch(self.fd, GLib.PRIORITY_DEFAULT,
                                           GLib.IO_IN | GLib.IO_ERR | GLib.IO_HUP, self._read)
-            self.state, self.message = "ready", "遥控器按键已接通（语音键录音，确定键 Enter）"
+            self.state, self.message = "ready", "遥控器已就绪：语音录音，Home 概览，左右选应用，确定进入或 Enter"
         except PermissionError:
             self.state, self.message = "permission", "请点“启用遥控器按键”，完成一次系统设备授权"
         except OSError as error:
@@ -102,6 +108,16 @@ class RemoteButtons:
         if kind == 0 and code == 3:  # SYN_DROPPED: lost release is unsafe.
             raise OSError("遥控器按键事件丢失，本次录音已取消")
         if kind != 1:
+            return
+        if code in NAVIGATION_KEYS:
+            if value == 1 and code not in self.navigation_held:
+                self.navigation_held.add(code)
+                action = NAVIGATION_KEYS[code]
+                self.navigation_presses[action] += 1
+                if self.navigated:
+                    self.navigated(action)
+            elif value == 0:
+                self.navigation_held.discard(code)
             return
         if code == CONFIRM_KEY:
             if value == 1 and not self.confirm_held:
@@ -152,6 +168,7 @@ class RemoteButtons:
             self.fd = None
         self.held = False
         self.confirm_held = False
+        self.navigation_held.clear()
 
     def close(self):
         self.enabled = False

@@ -112,11 +112,21 @@ The [Chinese guide](README.zh-CN.md) includes model options, vocabulary hints, a
 
 Pair **Xiaomi Bluetooth Remote 2 Pro** in Ubuntu's Bluetooth settings, then select **输入来源 → 小米遥控器麦克风** in SayRelay. On first use, click **启用遥控器按键** and authenticate in Ubuntu's system dialog. Wait until the voice channel and buttons are both ready, hide the settings window, focus the destination input, hold the remote's voice button, speak, and release to transcribe and paste. Set up keyboard paste permission before the first recording. `Ctrl+Alt+Shift+Space` cancels; the regular recording shortcut also controls the selected input source.
 
-After the text appears, press the remote's **center confirm button** to send one Enter key press/release to the focused application. Holding the button does not repeat. Confirm is ignored while recording, transcribing, or pasting, and is never queued for later. If keyboard permission needs restoring, return to the input after authorization and press confirm again. Enter follows the application's normal behavior, such as sending a chat message or inserting a newline.
+After the text appears, press the remote's **center confirm button** to send one Enter key press/release to the focused application. Enter follows the application's normal behavior, such as sending a chat message or inserting a newline. When GNOME's overview is open, confirm activates the selected window instead.
+
+| Remote button | Normal desktop | GNOME overview |
+| --- | --- | --- |
+| Home (house icon) | Open the running-window overview | Close the overview |
+| Left / right | System backward / forward application switch | Select a window to the left / right |
+| Center confirm | Enter in the focused application | Activate the selected window |
+
+Home uses GNOME's native overview, similar to the keyboard's Super/Windows key. It shows windows according to GNOME's workspace layout. The first navigation action focuses the window picker. Outside the overview, SayRelay reads the current `switch-applications` / `switch-applications-backward` shortcuts (normally Super+Tab / Shift+Super+Tab) and sends a complete press/release sequence. This follows GNOME's recent-application order; it is not a separate browser-style back/forward history, and repeated taps may alternate recent apps. Use Home for explicit visual selection.
+
+Holding a button does not repeat. Navigation and confirm are blocked during recording, transcription, or paste, and are never queued. After restoring keyboard authorization, press the desired button again. During overview animations and briefly after activating a window, confirm is blocked to avoid submitting a message immediately in the newly focused app. Closing the overview with a mouse or keyboard resets remote selection state. Desktop navigation targets GNOME 46 on Ubuntu 24.04; it does not install extensions or change system shortcuts.
 
 The current adapter targets **RC003, firmware 2671, ATVV 1.0 / ADPCM 16 kHz**. It discovers characteristic paths on each connection, displays battery level, and retries connection failures with a bounded delay. Remote audio stays in memory. Disconnects, missing audio synchronization, and stalled streams discard the incomplete recording. Switching to the computer microphone stops SayRelay's remote notifications without unpairing the remote. Your saved local microphone selection is retained.
 
-The remote is not a PipeWire audio source. On this Ubuntu setup, its voice key arrives as native `F5` events, without the expected ATVV start request. SayRelay therefore reads press/release events from the exact Bluetooth vendor/product (`2717:32B8`), verifies the opened device's identity again, and grabs only that remote to suppress its native key effects. Voice and confirm have the actions above; the remaining remote buttons are consumed without actions. The computer's keyboard is unaffected. Switching to local input or exiting releases the grab.
+The remote is not a PipeWire audio source. On this Ubuntu setup, its voice key arrives as native `F5` events, without the expected ATVV start request. SayRelay therefore reads press/release events from the exact Bluetooth vendor/product (`2717:32B8`), verifies the opened device's identity again, and grabs only that remote to suppress its native key effects. Voice, confirm, Home, left and right have the actions above; the remaining remote buttons are consumed without actions. The computer's keyboard is unaffected. Switching to local input or exiting releases the grab.
 
 The one-time system dialog installs `70-sayrelay-remote.rules`, granting the active desktop user access only to the RC003 input device through udev/logind. The app then runs without root, without membership of the broad `input` group, and without an additional Python Bluetooth package. If graphical authentication is unavailable, run the helper from a terminal:
 
@@ -153,7 +163,7 @@ See [SECURITY.md](SECURITY.md) for details. Avoid submitting private recordings,
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-The current suite has 72 tests. Without the local punctuation model, 67 run and 5 model-dependent tests are skipped. With the model installed, all 72 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, confirm suppression while busy or unauthorized, disconnect cancellation and the shared recognition pipeline. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
+The current suite has 90 tests. Without the local punctuation model, 85 run and 5 model-dependent tests are skipped. With the model installed, all 90 have passed locally. Remote tests cover the codec, notifications, stale callbacks, device identity checks, press/release and repeat handling, desktop navigation, confirm suppression while busy or unauthorized, disconnect cancellation and the shared recognition pipeline. Navigation tests simulate GNOME responses and do not replace a real desktop trial. Real Wayland and XWayland input-field paste checks also passed before remote integration; these checks do not measure speech recognition accuracy.
 
 Desktop smoke tests open their own input window and require an authorized graphical session:
 
